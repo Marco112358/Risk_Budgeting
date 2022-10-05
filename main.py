@@ -31,9 +31,7 @@ def my_newton(f, df, x0, tol, iter_tot):
 
 
 # Initial Guess for Algo
-x0_test = np.matrix([np.sum(asset_sds, 1)[0, 0] / b[0, 0],
-                     np.sum(asset_sds, 1)[0, 0] / b[0, 1],
-                     np.sum(asset_sds, 1)[0, 0] / b[0, 2]])
+x0_test = np.sum(asset_sds, 1)[0, 0] / b
 
 # Run Algo, get weights, print
 x_out, itn = my_newton(fn, f_prime, x0_test, 0.000001, 10000)
