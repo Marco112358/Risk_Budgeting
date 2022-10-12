@@ -1,12 +1,10 @@
-
 from pycoingecko import CoinGeckoAPI
 import pandas as pd
 from datetime import datetime
-from datetime import timezone
 
-cg = CoinGeckoAPI()
 
 def cg_pull(ticker='btc', curr='usd', days='max', intv='daily'):
+    cg = CoinGeckoAPI()
     out = cg.get_coin_market_chart_by_id(id=ticker, vs_currency=curr, days=days, interval=intv)
     df = pd.DataFrame(data=out)
     df[['date', 'price']] = pd.DataFrame(df.prices.tolist(), index=df.index)
