@@ -1,5 +1,6 @@
 import numpy as np
-
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def exp_ma_std_fnc(arr=None, half_life=0.0, past2present=True):
     # parameters: arr = array of data to get ema and exp_std;
@@ -24,3 +25,18 @@ def exp_ma_std_fnc(arr=None, half_life=0.0, past2present=True):
     exp_std = (np.sum(evar) / np.sum(wghts)) ** 0.5
 
     return ema, exp_std
+
+
+def get_expo_moments(df=None, lookback=100, halflife=0.0, col_nm='na'):
+    data = df.tail(lookback)
+    arry = np.array(data.loc[:, col_nm])
+    prc_ema, prc_estd = exp_ma_std_fnc(arr=arry, half_life=halflife, past2present=True)
+
+    data2 = df.tail(lookback+1).reset_index()
+    s1 = data2[0:lookback]
+    s2 = data2[1:lookback+1]
+    rtns = np.array(s2.loc[:,col_nm]) / np.array(s1.loc[:, col_nm]) - 1
+    rtn_ema, rtn_estd = exp_ma_std_fnc(arr=rtns, half_life=halflife, past2present=True)
+
+    return rtn_ema, rtn_estd, prc_ema, prc_estd
+
