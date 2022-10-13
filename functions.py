@@ -86,3 +86,33 @@ def rebal_by_period(timeperiod=100, rebal_freq=None, prices_final=None, st_dolla
         else:
             tkns_final.iloc[i] = tkns_final.iloc[i - 1]
     return tkns_final, fees
+
+
+def rebal_by_bands(timeperiod=100, rebal_bands=None, prices_final=None, st_dollars=10000, tgt_wghts=None, fee_pct=0.0):
+    st_vals = np.multiply(st_dollars, tgt_wghts)
+    st_prcs = prices_final.head(n=1)
+    st_tkns = st_vals / st_prcs
+    tkns_final = pd.DataFrame(index=prices_final.index, columns=prices_final.columns)
+    fees = pd.DataFrame(data=0, index=prices_final.index, columns=['Fees'])
+    tkns_final.iloc[0] = st_tkns
+    mins = np.subtract(tgt_wghts, rebal_bands)
+    mins = mins.clip(min=0.0)
+    maxes = np.add(tgt_wghts, rebal_bands)
+    maxes = maxes.clip(max=1.0)
+    for i in np.arange(1, timeperiod):
+        prcs = prices_final.iloc[i]
+        act_vals = tkns_final.iloc[i - 1] * prcs
+        pv_prefee = np.sum(act_vals)
+        wghts = act_vals / pv_prefee
+        if any(wghts < mins) or any(wghts > maxes):
+            tgt_vals_prefee = np.multiply(pv_prefee, tgt_wghts)
+            diffs = act_vals - tgt_vals_prefee
+            total_trade_val = np.sum(np.abs(diffs))
+            fee = total_trade_val * fee_pct
+            fees.iloc[i] = fee
+            pv_postfee = pv_prefee - fee
+            tgt_vals_postfee = np.multiply(pv_postfee, tgt_wghts)
+            tkns_final.iloc[i] = tgt_vals_postfee / prcs
+        else:
+            tkns_final.iloc[i] = tkns_final.iloc[i - 1]
+    return tkns_final, fees
