@@ -3,9 +3,9 @@ import numpy as np
 asset_sds = np.matrix([0.15, 0.2, 0.05])  # Asset standard deviations
 asset_corrs = np.matrix([[1.0, 0.8, 0.2], [0.8, 1.0, -0.1], [0.2, -0.1, 1.0]])  # Correlation Matrix
 b = np.matrix([0.4, 0.2, 0.4])  # target risk contributions (PCTRs)
+std_tgt = 0.1  # target ex-ante standard deviation
 
 asset_covars = np.multiply(asset_sds.transpose(), np.multiply(asset_corrs, asset_sds))
-
 # f_total = lambda x: 0.5 * np.matmul(x, np.matmul(asset_covars, x.transpose()))[0, 0] \
 #               - np.matmul(b, np.log(x).transpose())[0, 0]
 
@@ -44,3 +44,15 @@ ctrs = np.multiply(mctrs, wghts_out.transpose())
 pctrs = ctrs / port_sd
 print(port_sd)
 print(pctrs)
+
+# Levering the Portfolio Weights to get to the targeted total portfolio standard deviation level
+lev = std_tgt / port_sd
+new_wghts = lev * wghts_out
+new_port_sd = np.sqrt(np.matmul(new_wghts, np.matmul(asset_covars, new_wghts.transpose())))[0, 0]
+new_mctrs = np.matmul(asset_covars, new_wghts.transpose()) / new_port_sd
+new_ctrs = np.multiply(new_mctrs, new_wghts.transpose())
+new_pctrs = new_ctrs / new_port_sd
+print(new_wghts)
+print(new_port_sd)
+print(new_pctrs)
+

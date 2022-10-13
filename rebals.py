@@ -18,6 +18,8 @@ rebal_freq4 = 90
 rebal_band1 = [0.05] * len(token_nms)
 rebal_band2 = [0.025] * len(token_nms)
 rebal_band3 = [0.1] * len(token_nms)
+relative_rebal_band1 = 0.1
+relative_rebal_band2 = 0.25
 
 btc = cg_pull('bitcoin', 'usd', 'max', 'daily')
 atom = cg_pull('cosmos', 'usd', 'max', 'daily')
@@ -97,20 +99,41 @@ port_rtns7 = np.divide(port_val7.iloc[1:], port_val7.iloc[:-1]) - 1
 port_rtns7.columns = ['Portfolio Rtns 10% Rebal']
 total_fees7 = np.sum(fees7)
 
-pv_dfs = [port_val1, port_val2, port_val3, port_val4, port_val5, port_val6, port_val7]
+# 10% Relative Tolerance Bands Rebalancing
+tkns_final8, fees8 = fn.rebal_by_bands(timeperiod, None, prices_final, st_dollars, tgt_wghts, fee_pct,
+                                       relative_rebal_band1)
+port_val8 = pd.DataFrame(data=np.sum(tkns_final8 * prices_final, axis=1), index=prices_final.index,
+                         columns=['Portfolio Values Relative 10% Rebal'])
+fees8.columns = ['Fees Relative 10% Rebal']
+port_rtns8 = np.divide(port_val8.iloc[1:], port_val8.iloc[:-1]) - 1
+port_rtns8.columns = ['Portfolio Rtns Relative 10% Rebal']
+total_fees8 = np.sum(fees8)
+
+# 25% Relative Tolerance Bands Rebalancing
+tkns_final9, fees9 = fn.rebal_by_bands(timeperiod, None, prices_final, st_dollars, tgt_wghts, fee_pct,
+                                       relative_rebal_band2)
+port_val9 = pd.DataFrame(data=np.sum(tkns_final9 * prices_final, axis=1), index=prices_final.index,
+                         columns=['Portfolio Values Relative 25% Rebal'])
+fees9.columns = ['Fees Relative 25% Rebal']
+port_rtns9 = np.divide(port_val9.iloc[1:], port_val9.iloc[:-1]) - 1
+port_rtns9.columns = ['Portfolio Rtns Relative 25% Rebal']
+total_fees9 = np.sum(fees9)
+
+pv_dfs = [port_val1, port_val2, port_val3, port_val4, port_val5, port_val6, port_val7, port_val8, port_val9]
 port_val_final = ft.reduce(lambda left, right: pd.merge(left, right, left_index=True, right_index=True), pv_dfs)
 fig1 = px.line(data_frame=port_val_final)
 fig1.show()
 print(port_val_final.tail().to_string())
 
-fees_dfs = [fees1, fees2, fees3, fees4, fees5, fees6, fees7]
+fees_dfs = [fees1, fees2, fees3, fees4, fees5, fees6, fees7, fees8, fees9]
 fees_final = ft.reduce(lambda left, right: pd.merge(left, right, left_index=True, right_index=True), fees_dfs)
 fees_cum = fees_final.cumsum(axis=0)
 fig2 = px.line(data_frame=fees_cum)
 fig2.show()
 print(fees_cum.tail().to_string())
 
-port_rtns_dfs = [port_rtns1, port_rtns2, port_rtns3, port_rtns4, port_rtns5, port_rtns6, port_rtns7]
+port_rtns_dfs = [port_rtns1, port_rtns2, port_rtns3, port_rtns4, port_rtns5, port_rtns6, port_rtns7, port_rtns8,
+                 port_rtns9]
 port_rtns_final = ft.reduce(lambda left, right: pd.merge(left, right, left_index=True, right_index=True), port_rtns_dfs)
 
 ave_rtns = pd.DataFrame(data=0, index=['annualized return', 'annualized std'], columns=port_rtns_final.columns)
