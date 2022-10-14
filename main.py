@@ -1,58 +1,87 @@
+from api_testing import cg_pull
+import functions as fn
+import pandas as pd
+import functools as ft
 import numpy as np
+import plotly.express as px
+import datetime as dt
 
-asset_sds = np.matrix([0.15, 0.2, 0.05])  # Asset standard deviations
-asset_corrs = np.matrix([[1.0, 0.8, 0.2], [0.8, 1.0, -0.1], [0.2, -0.1, 1.0]])  # Correlation Matrix
-b = np.matrix([0.4, 0.2, 0.4])  # target risk contributions (PCTRs)
-std_tgt = 0.1  # target ex-ante standard deviation
+token_nms = ['btc', 'eth', 'atom', 'ada', 'sol', 'usdc']
+col_nms = ['datetime'] + token_nms
+start_dt = dt.date(2020, 12, 31)  # start really on the day following
+start_dt = pd.Timestamp(year=2020, month=12, day=31)
+st_dollars = 10000
+fee_pct = 0.003
+tgt_risk_wghts = [0.15, 0.3, 0.2, 0.2, 0.15]
+rebal_freq = 30
+lookback = 90
+halflife = 30
+weighting_type = 'exp'  # options are exp for exponential or arth for arithmetic
+tol = 0.00001
+iter_tot = 10000
+needed_first_dt = start_dt - pd.Timedelta(days=(lookback + 1))
 
-asset_covars = np.multiply(asset_sds.transpose(), np.multiply(asset_corrs, asset_sds))
-# f_total = lambda x: 0.5 * np.matmul(x, np.matmul(asset_covars, x.transpose()))[0, 0] \
-#               - np.matmul(b, np.log(x).transpose())[0, 0]
+btc = cg_pull('bitcoin', 'usd', 'max', 'daily')
+atom = cg_pull('cosmos', 'usd', 'max', 'daily')
+kuji = cg_pull('kujira', 'usd', 'max', 'daily')
+usdc = cg_pull('usd-coin', 'usd', 'max', 'daily')
+eth = cg_pull('ethereum', 'usd', 'max', 'daily')
+sol = cg_pull('solana', 'usd', 'max', 'daily')
+ada = cg_pull('cardano',  'usd', 'max', 'daily')
 
-# Functions used in newton algo
-fn = lambda x: np.matmul(asset_covars, x.transpose()) - (b / x).transpose()
-f_prime = lambda x: asset_covars + np.diagflat((b / np.multiply(x, x)))
-
-
-# Newton Algo
-def my_newton(f, df, x0, tol, iter_tot):
-    iter_n = 0
-    if np.sum(abs(f(x0))) <= tol:
-        return x0, iter_n
-    else:
-        x_new = x0 - np.matmul(np.linalg.inv(df(x0)), f(x0)).transpose()
-        for i in np.arange(0, iter_tot):
-            if np.sum(abs(f(x_new))) > tol:
-                x_new = x_new - np.matmul(np.linalg.inv(df(x_new)), f(x_new)).transpose()
-                iter_n = i
-            else:
-                return x_new, iter_n
-        return x_new, iter_n
+dfs = [btc, eth, atom, ada, sol, usdc]
+prices = ft.reduce(lambda left, right: pd.merge(left, right, on='datetime'), dfs)
+prices.columns = col_nms
+prices.set_index('datetime', inplace=True)
+prices_full = prices.loc[prices.index >= needed_first_dt]
+rtns_full = np.divide(prices_full.iloc[1:], prices_full.iloc[:-1]) - 1
+prices_other = prices.loc[prices.index >= start_dt]
+timeperiod = prices_other.shape[0]
 
 
-# Initial Guess for Algo
-x0_test = np.sum(asset_sds, 1)[0, 0] / b
+rtns_ex_usdc = rtns_full.drop('usdc', axis=1)
+prcs_ex_usdc = prices_full.drop('usdc', axis=1)
 
-# Run Algo, get weights, print
-x_out, itn = my_newton(fn, f_prime, x0_test, 0.000001, 10000)
-wghts_out = x_out / np.matmul(np.matrix(np.ones(x_out.shape[1])), x_out.transpose())
-print(wghts_out)
-print(itn)
-port_sd = np.sqrt(np.matmul(wghts_out, np.matmul(asset_covars, wghts_out.transpose())))[0, 0]
-mctrs = np.matmul(asset_covars, wghts_out.transpose()) / port_sd
-ctrs = np.multiply(mctrs, wghts_out.transpose())
-pctrs = ctrs / port_sd
-print(port_sd)
-print(pctrs)
+tkns_final1, fees1, wghts_final1 = fn.rebal_by_period_risk_balancing(timeperiod=timeperiod, lookback=lookback,
+                                                                     rebal_freq=rebal_freq, prices=prcs_ex_usdc,
+                                                                     rtns=rtns_ex_usdc, st_dollars=st_dollars,
+                                                                     tgt_risk_wghts=tgt_risk_wghts, fee_pct=fee_pct,
+                                                                     half_life=halflife, start_dt=start_dt,
+                                                                     weighting_type=weighting_type, tol=tol,
+                                                                     iter_tot=iter_tot)
 
-# Levering the Portfolio Weights to get to the targeted total portfolio standard deviation level
-lev = std_tgt / port_sd
-new_wghts = lev * wghts_out
-new_port_sd = np.sqrt(np.matmul(new_wghts, np.matmul(asset_covars, new_wghts.transpose())))[0, 0]
-new_mctrs = np.matmul(asset_covars, new_wghts.transpose()) / new_port_sd
-new_ctrs = np.multiply(new_mctrs, new_wghts.transpose())
-new_pctrs = new_ctrs / new_port_sd
-print(new_wghts)
-print(new_port_sd)
-print(new_pctrs)
+port_val1 = pd.DataFrame(data=np.sum(tkns_final1 * prices_other, axis=1), index=prices_other.index,
+                         columns=['Portfolio Values 30D Risk Rebal'])
+fees1.columns = ['Fees 30D Risk Rebal']
+port_rtns1 = np.divide(port_val1.iloc[1:], port_val1.iloc[:-1]) - 1
+port_rtns1.columns = ['Portfolio Rtns 30D Risk Rebal']
+total_fees1 = np.sum(fees1)
+
+pv_dfs = [port_val1]
+port_val_final = ft.reduce(lambda left, right: pd.merge(left, right, left_index=True, right_index=True), pv_dfs)
+fig1 = px.line(data_frame=port_val_final)
+fig1.show()
+print(port_val_final.tail().to_string())
+
+fees_dfs = [fees1]
+fees_final = ft.reduce(lambda left, right: pd.merge(left, right, left_index=True, right_index=True), fees_dfs)
+fees_cum = fees_final.cumsum(axis=0)
+fig2 = px.line(data_frame=fees_cum)
+fig2.show()
+print(fees_cum.tail().to_string())
+
+port_rtns_dfs = [port_rtns1]
+port_rtns_final = ft.reduce(lambda left, right: pd.merge(left, right, left_index=True, right_index=True), port_rtns_dfs)
+
+ave_rtns = pd.DataFrame(data=0, index=['annualized return', 'annualized std'], columns=port_rtns_final.columns)
+for i, col in enumerate(port_rtns_final.columns):
+    ave, sd = fn.get_simple_moments_series(port_rtns_final, port_rtns_final.shape[0] - 1,
+                                           port_rtns_final.columns[i])
+    ave_rtns.loc['annualized return', port_rtns_final.columns[i]] = ave * 365
+    ave_rtns.loc['annualized std', port_rtns_final.columns[i]] = sd * np.sqrt(365)
+
+ave_rtns.loc['ret/risk', :] = ave_rtns.loc['annualized return', :] / ave_rtns.loc['annualized std', :]
+print(ave_rtns.tail().to_string())
+
+
 

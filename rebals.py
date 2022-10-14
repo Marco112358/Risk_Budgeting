@@ -34,7 +34,9 @@ prices = ft.reduce(lambda left, right: pd.merge(left, right, on='datetime'), dfs
 prices.columns = col_nms
 prices.set_index('datetime', inplace=True)
 prices_final = prices.loc[prices.index >= start_dt]
+rtns_final = np.divide(prices_final.iloc[1:], prices_final.iloc[:-1]) - 1
 timeperiod = prices_final.shape[0]
+rtn_timeperiod = rtns_final.shape[0]
 
 # Daily Rebalancing
 tkns_final1, fees1 = fn.rebal_by_period(timeperiod, rebal_freq1, prices_final, st_dollars, tgt_wghts, fee_pct)
@@ -138,7 +140,7 @@ port_rtns_final = ft.reduce(lambda left, right: pd.merge(left, right, left_index
 
 ave_rtns = pd.DataFrame(data=0, index=['annualized return', 'annualized std'], columns=port_rtns_final.columns)
 for i, col in enumerate(port_rtns_final.columns):
-    ave, sd = fn.get_simple_moments(port_rtns_final, port_rtns_final.shape[0] - 1,
+    ave, sd = fn.get_simple_moments_series(port_rtns_final, port_rtns_final.shape[0] - 1,
                                     port_rtns_final.columns[i])
     ave_rtns.loc['annualized return', port_rtns_final.columns[i]] = ave * 365
     ave_rtns.loc['annualized std', port_rtns_final.columns[i]] = sd * np.sqrt(365)
