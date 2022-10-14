@@ -189,7 +189,8 @@ def calc_risk_bal_weights(asset_sds=None, asset_corrs=None, risk_tgts=None, std_
 
 def rebal_by_period_risk_balancing(timeperiod=100, lookback=90, rebal_freq=None, prices=None, rtns=None, st_dollars=10000,
                                    tgt_risk_wghts=None, fee_pct=0.0, half_life=30, start_dt=None,
-                                   weighting_type='arth', tol=0.00001, iter_tot=10000):
+                                   weighting_type='arth', tol=0.00001, iter_tot=10000, std_tgt=None, int_paid=0.0,
+                                   int_rec=0.0):
 
     rtn_df = rtns.loc[rtns.index <= start_dt]
     if weighting_type == 'arth':
@@ -200,18 +201,21 @@ def rebal_by_period_risk_balancing(timeperiod=100, lookback=90, rebal_freq=None,
         std = std.iloc[0]
     st_ave, st_std, st_cov = annualize_moments(ave=ave, std=std, covar=covar, period=1)
     new_wghts, new_port_sd, new_pctrs = calc_risk_bal_weights(asset_sds=st_std, asset_corrs=None,
-                                                              risk_tgts=tgt_risk_wghts, std_tgt=None,
+                                                              risk_tgts=tgt_risk_wghts, std_tgt=std_tgt,
                                                               asset_covars=st_cov, tol=tol, iter_tot=iter_tot)
 
     st_vals = np.multiply(st_dollars, new_wghts)
+    cash_prev = st_dollars - np.sum(st_vals)
     prices = prices.loc[prices.index >= start_dt]
     st_prcs = prices.head(n=1)
     st_tkns = st_vals / st_prcs
     tkns_final = pd.DataFrame(index=prices.index, columns=prices.columns)
     wghts_final = pd.DataFrame(index=prices.index, columns=prices.columns)
+    cash_final = pd.DataFrame(index=prices.index, columns=['Cash'])
     fees = pd.DataFrame(data=0, index=prices.index, columns=['Fees'])
     tkns_final.iloc[0] = st_tkns
     wghts_final.iloc[0] = new_wghts
+    cash_final.iloc[0] = cash_prev
     rebals = np.arange(rebal_freq, timeperiod, step=rebal_freq)
     for i in np.arange(1, timeperiod):
         if i in rebals:
@@ -224,12 +228,12 @@ def rebal_by_period_risk_balancing(timeperiod=100, lookback=90, rebal_freq=None,
                 std = std.iloc[0]
             st_ave, st_std, st_cov = annualize_moments(ave=ave, std=std, covar=covar, period=1)
             new_wghts, new_port_sd, new_pctrs = calc_risk_bal_weights(asset_sds=st_std, asset_corrs=None,
-                                                                      risk_tgts=tgt_risk_wghts, std_tgt=None,
+                                                                      risk_tgts=tgt_risk_wghts, std_tgt=std_tgt,
                                                                       asset_covars=st_cov, tol=tol, iter_tot=iter_tot)
             prcs = prices.iloc[i]
             act_vals = tkns_final.iloc[i - 1] * prcs
-            pv_prefee = np.sum(act_vals)
-            tgt_vals_prefee = np.multiply(pv_prefee, new_wghts)
+            pv_prefee = np.sum(act_vals) + cash_final.iloc[i - 1][0]  # correct value with cash
+            tgt_vals_prefee = np.multiply(pv_prefee, new_wghts)  # below pv_prefee
             diffs = act_vals - tgt_vals_prefee
             total_trade_val = np.sum(np.abs(diffs))
             fee = total_trade_val * fee_pct
@@ -238,7 +242,12 @@ def rebal_by_period_risk_balancing(timeperiod=100, lookback=90, rebal_freq=None,
             tgt_vals_postfee = np.multiply(pv_postfee, new_wghts)
             tkns_final.iloc[i] = tgt_vals_postfee / prcs
             wghts_final.iloc[i] = new_wghts
+            cash_final.iloc[i] = pv_postfee - np.sum(tgt_vals_postfee)
         else:
             tkns_final.iloc[i] = tkns_final.iloc[i - 1]
             wghts_final.iloc[i] = wghts_final.iloc[i - 1]
-    return tkns_final, fees, wghts_final
+            if cash_final.iloc[i - 1][0] < 0:
+                cash_final.iloc[i] = cash_final.iloc[i - 1][0] * (1 + int_paid / 365)
+            else:
+                cash_final.iloc[i] = cash_final.iloc[i - 1][0] * (1 + int_rec / 365)
+    return tkns_final, fees, wghts_final, cash_final

@@ -12,13 +12,16 @@ start_dt = dt.date(2020, 12, 31)  # start really on the day following
 start_dt = pd.Timestamp(year=2020, month=12, day=31)
 st_dollars = 10000
 fee_pct = 0.003
-tgt_risk_wghts = [0.15, 0.3, 0.2, 0.2, 0.15]
+tgt_risk_wghts = [0.2, 0.35, 0.1, 0.2, 0.15]
+std_tgt = 0.6
 rebal_freq = 30
 lookback = 90
-halflife = 30
+half_life = 30
 weighting_type = 'exp'  # options are exp for exponential or arth for arithmetic
 tol = 0.00001
 iter_tot = 10000
+int_paid = 0.02
+int_rec = int_paid
 needed_first_dt = start_dt - pd.Timedelta(days=(lookback + 1))
 
 btc = cg_pull('bitcoin', 'usd', 'max', 'daily')
@@ -27,7 +30,7 @@ kuji = cg_pull('kujira', 'usd', 'max', 'daily')
 usdc = cg_pull('usd-coin', 'usd', 'max', 'daily')
 eth = cg_pull('ethereum', 'usd', 'max', 'daily')
 sol = cg_pull('solana', 'usd', 'max', 'daily')
-ada = cg_pull('cardano',  'usd', 'max', 'daily')
+ada = cg_pull('cardano', 'usd', 'max', 'daily')
 
 dfs = [btc, eth, atom, ada, sol, usdc]
 prices = ft.reduce(lambda left, right: pd.merge(left, right, on='datetime'), dfs)
@@ -36,21 +39,25 @@ prices.set_index('datetime', inplace=True)
 prices_full = prices.loc[prices.index >= needed_first_dt]
 rtns_full = np.divide(prices_full.iloc[1:], prices_full.iloc[:-1]) - 1
 prices_other = prices.loc[prices.index >= start_dt]
+prices_usdc = prices_other.loc[:, 'usdc']
 timeperiod = prices_other.shape[0]
-
 
 rtns_ex_usdc = rtns_full.drop('usdc', axis=1)
 prcs_ex_usdc = prices_full.drop('usdc', axis=1)
 
-tkns_final1, fees1, wghts_final1 = fn.rebal_by_period_risk_balancing(timeperiod=timeperiod, lookback=lookback,
-                                                                     rebal_freq=rebal_freq, prices=prcs_ex_usdc,
-                                                                     rtns=rtns_ex_usdc, st_dollars=st_dollars,
-                                                                     tgt_risk_wghts=tgt_risk_wghts, fee_pct=fee_pct,
-                                                                     half_life=halflife, start_dt=start_dt,
-                                                                     weighting_type=weighting_type, tol=tol,
-                                                                     iter_tot=iter_tot)
+tkns_final1, fees1, \
+wghts_final1, cash_final1 = fn.rebal_by_period_risk_balancing(timeperiod=timeperiod, lookback=lookback,
+                                                              rebal_freq=rebal_freq, prices=prcs_ex_usdc,
+                                                              rtns=rtns_ex_usdc, st_dollars=st_dollars,
+                                                              tgt_risk_wghts=tgt_risk_wghts, fee_pct=fee_pct,
+                                                              half_life=half_life, start_dt=start_dt,
+                                                              weighting_type=weighting_type, tol=tol,
+                                                              iter_tot=iter_tot, std_tgt=std_tgt,
+                                                              int_paid=int_paid, int_rec=int_rec)
 
-port_val1 = pd.DataFrame(data=np.sum(tkns_final1 * prices_other, axis=1), index=prices_other.index,
+tkn_vals1 = np.sum(tkns_final1 * prices_other, axis=1)
+tot_val1 = pd.concat([tkn_vals1, cash_final1], axis=1)
+port_val1 = pd.DataFrame(data=np.sum(tot_val1, axis=1), index=prices_other.index,
                          columns=['Portfolio Values 30D Risk Rebal'])
 fees1.columns = ['Fees 30D Risk Rebal']
 port_rtns1 = np.divide(port_val1.iloc[1:], port_val1.iloc[:-1]) - 1
@@ -82,6 +89,3 @@ for i, col in enumerate(port_rtns_final.columns):
 
 ave_rtns.loc['ret/risk', :] = ave_rtns.loc['annualized return', :] / ave_rtns.loc['annualized std', :]
 print(ave_rtns.tail().to_string())
-
-
-
