@@ -32,7 +32,7 @@ usdc = cg_pull('usd-coin', 'usd', 'max', 'daily')
 eth = cg_pull('ethereum', 'usd', 'max', 'daily')
 sol = cg_pull('solana', 'usd', 'max', 'daily')
 ada = cg_pull('cardano', 'usd', 'max', 'daily')
-dfs = [btc, eth, atom, ada, sol, usdc]
+dfs = [btc, eth, atom, ada, sol, usdc]  # this needs to be changed if u change the tokens allocated to
 
 # Implied Parameters
 prices = ft.reduce(lambda left, right: pd.merge(left, right, on='datetime'), dfs)
