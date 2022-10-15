@@ -5,6 +5,7 @@ import functools as ft
 import numpy as np
 import plotly.express as px
 
+# Parameters
 token_nms = ['btc', 'eth', 'atom', 'ada', 'sol', 'usdc']
 col_nms = ['datetime'] + token_nms
 start_dt = '12/31/2020'  # start really on the day following
@@ -21,6 +22,7 @@ rebal_band3 = [0.1] * len(token_nms)
 relative_rebal_band1 = 0.1
 relative_rebal_band2 = 0.25
 
+# API Pulls from Coin Gecko
 btc = cg_pull('bitcoin', 'usd', 'max', 'daily')
 atom = cg_pull('cosmos', 'usd', 'max', 'daily')
 kuji = cg_pull('kujira', 'usd', 'max', 'daily')
@@ -28,8 +30,9 @@ usdc = cg_pull('usd-coin', 'usd', 'max', 'daily')
 eth = cg_pull('ethereum', 'usd', 'max', 'daily')
 sol = cg_pull('solana', 'usd', 'max', 'daily')
 ada = cg_pull('cardano',  'usd', 'max', 'daily')
+dfs = [btc, eth, atom, ada, sol, usdc]  # this also needs to change if u change the tokens allocated to
 
-dfs = [btc, eth, atom, ada, sol, usdc]
+# Implied Parameters
 prices = ft.reduce(lambda left, right: pd.merge(left, right, on='datetime'), dfs)
 prices.columns = col_nms
 prices.set_index('datetime', inplace=True)
