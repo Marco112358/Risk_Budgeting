@@ -124,6 +124,7 @@ port_rtns9 = np.divide(port_val9.iloc[1:], port_val9.iloc[:-1]) - 1
 port_rtns9.columns = ['Portfolio Rtns Relative 25% Rebal']
 total_fees9 = np.sum(fees9)
 
+# Reformat for Printing and Graphing
 pv_dfs = [port_val1, port_val2, port_val3, port_val4, port_val5, port_val6, port_val7, port_val8, port_val9]
 port_val_final = ft.reduce(lambda left, right: pd.merge(left, right, left_index=True, right_index=True), pv_dfs)
 fig1 = px.line(data_frame=port_val_final)
