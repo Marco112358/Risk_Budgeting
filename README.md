@@ -1,6 +1,6 @@
 # Risk_Budgeting
  
- This report is a mess. 
+ This repo is a mess. 
 The main function runs through a risk balancing model (u choose the risk weights not capital weights.
 It then runs through time using exponential weighting to get the backward looking covariance matrix.
 Then it rebalances (currently every 30 days) to get the new capital weights for the risk weighting.
