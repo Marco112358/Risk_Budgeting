@@ -6,10 +6,10 @@ import numpy as np
 import plotly.express as px
 import datetime as dt
 
+# Parameters of Risk Balancing Backtesting 
 token_nms = ['btc', 'eth', 'atom', 'ada', 'sol', 'usdc']
 col_nms = ['datetime'] + token_nms
-start_dt = dt.date(2020, 12, 31)  # start really on the day following
-start_dt = pd.Timestamp(year=2020, month=12, day=31)
+start_dt = pd.Timestamp(year=2020, month=12, day=31)  # start really on the day following
 st_dollars = 10000
 fee_pct = 0.003
 tgt_risk_wghts = [0.2, 0.35, 0.1, 0.2, 0.15]
@@ -24,6 +24,7 @@ int_paid = 0.02
 int_rec = int_paid
 needed_first_dt = start_dt - pd.Timedelta(days=(lookback + 1))
 
+# API Pulls from Coin Gecko
 btc = cg_pull('bitcoin', 'usd', 'max', 'daily')
 atom = cg_pull('cosmos', 'usd', 'max', 'daily')
 kuji = cg_pull('kujira', 'usd', 'max', 'daily')
@@ -31,8 +32,9 @@ usdc = cg_pull('usd-coin', 'usd', 'max', 'daily')
 eth = cg_pull('ethereum', 'usd', 'max', 'daily')
 sol = cg_pull('solana', 'usd', 'max', 'daily')
 ada = cg_pull('cardano', 'usd', 'max', 'daily')
-
 dfs = [btc, eth, atom, ada, sol, usdc]
+
+# Implied Parameters
 prices = ft.reduce(lambda left, right: pd.merge(left, right, on='datetime'), dfs)
 prices.columns = col_nms
 prices.set_index('datetime', inplace=True)
@@ -41,10 +43,10 @@ rtns_full = np.divide(prices_full.iloc[1:], prices_full.iloc[:-1]) - 1
 prices_other = prices.loc[prices.index >= start_dt]
 prices_usdc = prices_other.loc[:, 'usdc']
 timeperiod = prices_other.shape[0]
-
 rtns_ex_usdc = rtns_full.drop('usdc', axis=1)
 prcs_ex_usdc = prices_full.drop('usdc', axis=1)
 
+# Run Risk Balancing BackTesting
 tkns_final1, fees1, \
 wghts_final1, cash_final1 = fn.rebal_by_period_risk_balancing(timeperiod=timeperiod, lookback=lookback,
                                                               rebal_freq=rebal_freq, prices=prcs_ex_usdc,
@@ -55,6 +57,7 @@ wghts_final1, cash_final1 = fn.rebal_by_period_risk_balancing(timeperiod=timeper
                                                               iter_tot=iter_tot, std_tgt=std_tgt,
                                                               int_paid=int_paid, int_rec=int_rec)
 
+# Reformat Data for Printing and Graphing
 tkn_vals1 = np.sum(tkns_final1 * prices_other, axis=1)
 tot_val1 = pd.concat([tkn_vals1, cash_final1], axis=1)
 port_val1 = pd.DataFrame(data=np.sum(tot_val1, axis=1), index=prices_other.index,
