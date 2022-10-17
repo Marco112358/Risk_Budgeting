@@ -187,8 +187,8 @@ def calc_risk_bal_weights(asset_sds=None, asset_corrs=None, risk_tgts=None, std_
     return new_wghts, new_port_sd, new_pctrs
 
 
-def rebal_by_period_risk_balancing(timeperiod=100, lookback=90, rebal_freq=None, prices=None, rtns=None, st_dollars=10000,
-                                   tgt_risk_wghts=None, fee_pct=0.0, half_life=30, start_dt=None,
+def rebal_by_period_risk_balancing(timeperiod=100, lookback=90, rebal_freq=None, prices=None, rtns=None,
+                                   st_dollars=10000, tgt_risk_wghts=None, fee_pct=0.0, half_life=30, start_dt=None,
                                    weighting_type='arth', tol=0.00001, iter_tot=10000, std_tgt=None, int_paid=0.0,
                                    int_rec=0.0):
 
@@ -199,10 +199,10 @@ def rebal_by_period_risk_balancing(timeperiod=100, lookback=90, rebal_freq=None,
         ave, std, covar, corr = get_exponential_moments(df=rtn_df, half_life=half_life, lookback=lookback)
         ave = ave.iloc[0]
         std = std.iloc[0]
-    st_ave, st_std, st_cov = annualize_moments(ave=ave, std=std, covar=covar, period=1)
-    new_wghts, new_port_sd, new_pctrs = calc_risk_bal_weights(asset_sds=st_std, asset_corrs=None,
+    # st_ave, st_std, st_cov = annualize_moments(ave=ave, std=std, covar=covar, period=1)
+    new_wghts, new_port_sd, new_pctrs = calc_risk_bal_weights(asset_sds=std, asset_corrs=None,
                                                               risk_tgts=tgt_risk_wghts, std_tgt=std_tgt,
-                                                              asset_covars=st_cov, tol=tol, iter_tot=iter_tot)
+                                                              asset_covars=covar, tol=tol, iter_tot=iter_tot)
 
     st_vals = np.multiply(st_dollars, new_wghts)
     cash_prev = st_dollars - np.sum(st_vals)
@@ -226,10 +226,10 @@ def rebal_by_period_risk_balancing(timeperiod=100, lookback=90, rebal_freq=None,
                 ave, std, covar, corr = get_exponential_moments(df=rtn_df, half_life=half_life, lookback=lookback)
                 ave = ave.iloc[0]
                 std = std.iloc[0]
-            st_ave, st_std, st_cov = annualize_moments(ave=ave, std=std, covar=covar, period=1)
-            new_wghts, new_port_sd, new_pctrs = calc_risk_bal_weights(asset_sds=st_std, asset_corrs=None,
+            # st_ave, st_std, st_cov = annualize_moments(ave=ave, std=std, covar=covar, period=1)
+            new_wghts, new_port_sd, new_pctrs = calc_risk_bal_weights(asset_sds=std, asset_corrs=None,
                                                                       risk_tgts=tgt_risk_wghts, std_tgt=std_tgt,
-                                                                      asset_covars=st_cov, tol=tol, iter_tot=iter_tot)
+                                                                      asset_covars=covar, tol=tol, iter_tot=iter_tot)
             prcs = prices.iloc[i]
             act_vals = tkns_final.iloc[i - 1] * prcs
             pv_prefee = np.sum(act_vals) + cash_final.iloc[i - 1][0]  # correct value with cash
