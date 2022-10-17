@@ -149,6 +149,17 @@ def newtons_algo(f, df, x0, tol, iter_tot):
         return x_new, iter_n
 
 
+def pctrs(asset_sds=None, asset_corrs=None, wghts=None, asset_covars=None):
+    if asset_covars is None:
+        asset_covars = np.multiply(asset_sds.transpose(), np.multiply(asset_corrs, asset_sds))
+    port_sd = np.sqrt(np.matmul(wghts, np.matmul(asset_covars, wghts.transpose())))
+    mctrs = np.matmul(asset_covars, wghts.transpose()) / port_sd
+    ctrs = np.multiply(mctrs, wghts.transpose())
+    pctrs = ctrs / port_sd
+    pctrs = pd.Series(data=np.array(pctrs.transpose()).reshape(len(asset_sds)), index=asset_sds.index)
+    return pctrs
+
+
 def calc_risk_bal_weights(asset_sds=None, asset_corrs=None, risk_tgts=None, std_tgt=None, asset_covars=None,
                           tol=0.00001, iter_tot=10000):
     if asset_covars is None:
@@ -159,10 +170,12 @@ def calc_risk_bal_weights(asset_sds=None, asset_corrs=None, risk_tgts=None, std_
     f_prime = lambda x: asset_covars + np.diagflat((risk_tgts / np.multiply(x, x)))
 
     # Initial Guess for Algo
-    x0_test = np.zeros(len(asset_sds)) + (1/len(asset_sds))
+    w0 = np.zeros(len(asset_sds)) + (1/len(asset_sds))
+    # x0 = w0 / np.sqrt(np.matmul(w0, np.matmul(asset_covars, w0.transpose())))
+    x0 = np.zeros(len(asset_sds)) + 1
 
     # Run Algo, get weights
-    x_out, itn = newtons_algo(fn, f_prime, x0_test, tol, iter_tot)
+    x_out, itn = newtons_algo(fn, f_prime, x0, tol, iter_tot)
     wghts_out = x_out / np.matmul(np.matrix(np.ones(x_out.shape[0])), x_out.transpose())
     port_sd = np.sqrt(np.matmul(wghts_out, np.matmul(asset_covars, wghts_out.transpose())))[0][0]
     mctrs = np.matmul(asset_covars, wghts_out.transpose()) / port_sd
@@ -184,6 +197,7 @@ def calc_risk_bal_weights(asset_sds=None, asset_corrs=None, risk_tgts=None, std_
         new_pctrs = pctrs
 
     new_wghts = pd.Series(data=np.array(new_wghts.transpose()).reshape(len(asset_sds)), index=asset_sds.index)
+    new_pctrs = pd.Series(data=np.array(new_pctrs.transpose()).reshape(len(asset_sds)), index=asset_sds.index)
     return new_wghts, new_port_sd, new_pctrs
 
 
@@ -211,10 +225,12 @@ def rebal_by_period_risk_balancing(timeperiod=100, lookback=90, rebal_freq=None,
     st_tkns = st_vals / st_prcs
     tkns_final = pd.DataFrame(index=prices.index, columns=prices.columns)
     wghts_final = pd.DataFrame(index=prices.index, columns=prices.columns)
+    pctrs_final = pd.DataFrame(index=prices.index, columns=prices.columns)
     cash_final = pd.DataFrame(index=prices.index, columns=['Cash'])
     fees = pd.DataFrame(data=0, index=prices.index, columns=['Fees'])
     tkns_final.iloc[0] = st_tkns
     wghts_final.iloc[0] = new_wghts
+    pctrs_final.iloc[0] = new_pctrs
     cash_final.iloc[0] = cash_prev
     rebals = np.arange(rebal_freq, timeperiod, step=rebal_freq)
     for i in np.arange(1, timeperiod):
@@ -242,12 +258,25 @@ def rebal_by_period_risk_balancing(timeperiod=100, lookback=90, rebal_freq=None,
             tgt_vals_postfee = np.multiply(pv_postfee, new_wghts)
             tkns_final.iloc[i] = tgt_vals_postfee / prcs
             wghts_final.iloc[i] = new_wghts
+            pctrs_final.iloc[i] = new_pctrs
             cash_final.iloc[i] = pv_postfee - np.sum(tgt_vals_postfee)
         else:
             tkns_final.iloc[i] = tkns_final.iloc[i - 1]
             wghts_final.iloc[i] = wghts_final.iloc[i - 1]
+
+            rtn_df = rtns.loc[rtns.index <= prices.index[i]]
+            if weighting_type == 'arth':
+                ave, std, covar, corr = get_simple_moments(df=rtn_df, lookback=lookback)
+            elif weighting_type == 'exp':
+                ave, std, covar, corr = get_exponential_moments(df=rtn_df, half_life=half_life, lookback=lookback)
+                ave = ave.iloc[0]
+                std = std.iloc[0]
+            # st_ave, st_std, st_cov = annualize_moments(ave=ave, std=std, covar=covar, period=1)
+            new_pctrs = pctrs(asset_sds=std, asset_corrs=None, wghts=wghts_final.iloc[i - 1], asset_covars=covar)
+            pctrs_final.iloc[i] = new_pctrs
+
             if cash_final.iloc[i - 1][0] < 0:
                 cash_final.iloc[i] = cash_final.iloc[i - 1][0] * (1 + int_paid / 365)
             else:
                 cash_final.iloc[i] = cash_final.iloc[i - 1][0] * (1 + int_rec / 365)
-    return tkns_final, fees, wghts_final, cash_final
+    return tkns_final, fees, wghts_final, cash_final, pctrs_final

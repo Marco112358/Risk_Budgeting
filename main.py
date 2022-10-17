@@ -5,6 +5,7 @@ import functools as ft
 import numpy as np
 import plotly.express as px
 import datetime as dt
+import openpyxl
 
 # Parameters of Risk Balancing Backtesting 
 token_nms = ['btc', 'eth', 'atom', 'ada', 'sol']
@@ -13,10 +14,10 @@ start_dt = pd.Timestamp(year=2020, month=12, day=31)  # start really on the day 
 st_dollars = 10000
 fee_pct = 0.003
 tgt_risk_wghts = [0.2, 0.35, 0.1, 0.2, 0.15]
-std_tgt = 1.0
+std_tgt = None
 rebal_freq = 90
-lookback = 90
-half_life = 30
+lookback = rebal_freq
+half_life = rebal_freq / 3
 weighting_type = 'exp'  # options are exp for exponential or arth for arithmetic
 tol = 0.00001
 iter_tot = 10000
@@ -45,36 +46,38 @@ prices.columns = col_nms
 prices.set_index('datetime', inplace=True)
 prices_full = prices.loc[prices.index >= needed_first_dt]
 rtns_full = np.divide(prices_full.iloc[1:], prices_full.iloc[:-1]) - 1
-prices_other = prices.loc[prices.index >= start_dt]
+prices_final = prices.loc[prices.index >= start_dt]
+rtns_final = np.divide(prices_final.iloc[1:], prices_final.iloc[:-1]) - 1
+
 # prices_usdc = prices_other.loc[:, 'usdc']
-timeperiod = prices_other.shape[0]
+timeperiod = prices_final.shape[0]
+rtn_timeperiod = rtns_final.shape[0]
 # rtns_ex_usdc = rtns_full.drop('usdc', axis=1)
 # prcs_ex_usdc = prices_full.drop('usdc', axis=1)
 
 # Run Risk Balancing BackTesting
 tkns_final1, fees1, \
-wghts_final1, cash_final1 = fn.rebal_by_period_risk_balancing(timeperiod=timeperiod, lookback=lookback,
-                                                              rebal_freq=rebal_freq, prices=prices_full,
-                                                              rtns=rtns_full, st_dollars=st_dollars,
-                                                              tgt_risk_wghts=tgt_risk_wghts, fee_pct=fee_pct,
-                                                              half_life=half_life, start_dt=start_dt,
-                                                              weighting_type=weighting_type, tol=tol,
-                                                              iter_tot=iter_tot, std_tgt=std_tgt_unannualized,
-                                                              int_paid=int_paid, int_rec=int_rec)
+wghts_final1, cash_final1, pctrs1 = fn.rebal_by_period_risk_balancing(timeperiod=timeperiod, lookback=lookback,
+                                                                      rebal_freq=rebal_freq, prices=prices_full,
+                                                                      rtns=rtns_full, st_dollars=st_dollars,
+                                                                      tgt_risk_wghts=tgt_risk_wghts, fee_pct=fee_pct,
+                                                                      half_life=half_life, start_dt=start_dt,
+                                                                      weighting_type=weighting_type, tol=tol,
+                                                                      iter_tot=iter_tot, std_tgt=std_tgt_unannualized,
+                                                                      int_paid=int_paid, int_rec=int_rec)
 
 # Reformat Data for Printing and Graphing
-tkn_vals1 = np.sum(tkns_final1 * prices_other, axis=1)
+tkn_vals1 = np.sum(tkns_final1 * prices_final, axis=1)
 tot_val1 = pd.concat([tkn_vals1, cash_final1], axis=1)
-port_val1 = pd.DataFrame(data=np.sum(tot_val1, axis=1), index=prices_other.index,
+port_val1 = pd.DataFrame(data=np.sum(tot_val1, axis=1), index=prices_final.index,
                          columns=['Portfolio Values 90D Risk Rebal'])
 fees1.columns = ['Fees 90D Risk Rebal']
 port_rtns1 = np.divide(port_val1.iloc[1:], port_val1.iloc[:-1]) - 1
 port_rtns1.columns = ['Portfolio Rtns 90D Risk Rebal']
 total_fees1 = np.sum(fees1)
 
-
 # Parameters
-tgt_wghts = [0.2, 0.35, 0.1, 0.2, 0.15]
+tgt_wghts = tgt_risk_wghts
 rebal_freq1 = 1
 rebal_freq2 = 7
 rebal_freq3 = 30
@@ -84,15 +87,6 @@ rebal_band2 = [0.025] * len(token_nms)
 rebal_band3 = [0.1] * len(token_nms)
 relative_rebal_band1 = 0.1
 relative_rebal_band2 = 0.25
-
-# Implied Parameters
-prices = ft.reduce(lambda left, right: pd.merge(left, right, on='datetime'), dfs)
-prices.columns = col_nms
-prices.set_index('datetime', inplace=True)
-prices_final = prices.loc[prices.index >= start_dt]
-rtns_final = np.divide(prices_final.iloc[1:], prices_final.iloc[:-1]) - 1
-timeperiod = prices_final.shape[0]
-rtn_timeperiod = rtns_final.shape[0]
 
 # Weekly Rebalancing
 tkns_final2, fees2 = fn.rebal_by_period(timeperiod, rebal_freq2, prices_final, st_dollars, tgt_wghts, fee_pct)
@@ -189,9 +183,14 @@ port_rtns_final = ft.reduce(lambda left, right: pd.merge(left, right, left_index
 ave_rtns = pd.DataFrame(data=0, index=['annualized return', 'annualized std'], columns=port_rtns_final.columns)
 for i, col in enumerate(port_rtns_final.columns):
     ave, sd = fn.get_simple_moments_series(port_rtns_final, port_rtns_final.shape[0] - 1,
-                                    port_rtns_final.columns[i])
+                                           port_rtns_final.columns[i])
     ave_rtns.loc['annualized return', port_rtns_final.columns[i]] = ave * 365
     ave_rtns.loc['annualized std', port_rtns_final.columns[i]] = sd * np.sqrt(365)
 
 ave_rtns.loc['ret/risk', :] = ave_rtns.loc['annualized return', :] / ave_rtns.loc['annualized std', :]
 print(ave_rtns.tail().to_string())
+
+HPR = np.divide(port_val_final, st_dollars) - 1
+print(HPR.tail().to_string())
+
+prices_full.to_excel("prices_full.xlsx")
