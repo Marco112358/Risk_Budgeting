@@ -41,35 +41,61 @@ rtn_timeperiod = rtns_final.shape[0]
 
 ave, std, covar, corr = fn.get_simple_moments(rtns_final, rtn_timeperiod)
 ave_ann, std_ann, covar_ann = fn.annualize_moments(ave, std, covar, 1)
-pctrs = fn.pctrs(asset_sds=std_ann, asset_corrs=None, wghts=np.array(tgt_wghts), asset_covars=covar_ann)
+pctrs_imp1 = fn.pctrs(asset_sds=std_ann, asset_corrs=None, wghts=np.array(tgt_wghts), asset_covars=covar_ann)
 
-
-# No Rebal
+# No Rebal Capital Weighting
 no_rebal = timeperiod
-tkns_final, fees = fn.rebal_by_bands(timeperiod, no_rebal, prices_final, st_dollars, tgt_wghts, fee_pct)
-port_val = pd.DataFrame(data=np.sum(tkns_final * prices_final, axis=1), index=prices_final.index,
-                        columns=['Portfolio Values'])
-port_rtns = np.divide(port_val.iloc[1:], port_val.iloc[:-1]) - 1
-port_rtns.columns = ['Portfolio Rtns']
+tkns_final1, fees1 = fn.rebal_by_period(timeperiod, no_rebal, prices_final, st_dollars, tgt_wghts, fee_pct)
+port_val1 = pd.DataFrame(data=np.sum(tkns_final1 * prices_final, axis=1), index=prices_final.index,
+                         columns=['Portfolio Values Capital Weighting'])
+port_rtns1 = np.divide(port_val1.iloc[1:], port_val1.iloc[:-1]) - 1
+port_rtns1.columns = ['Portfolio Rtns Capital Weighting']
 
 prices_last = prices_final.tail(1)
-tkns_last = tkns_final.tail(1)
-wghts = np.divide((tkns_last * prices_last), np.sum(tkns_last * prices_last, axis=1)[0])
+tkns_last1 = tkns_final1.tail(1)
+wghts1 = np.divide((tkns_last1 * prices_last), np.sum(tkns_last1 * prices_last, axis=1)[0])
 
-port_ave, port_sd = fn.get_simple_moments_series(port_rtns, port_rtns.shape[0], port_rtns.columns[0])
+port_ave1, port_sd1 = fn.get_simple_moments_series(port_rtns1, port_rtns1.shape[0], port_rtns1.columns[0])
 
 x = rtns_final
-y = port_rtns
+y = port_rtns1
 model = sm.OLS(y, x)
 result = model.fit()
-print(result.summary())
+# print(result.summary())
 param = result.params
 
-pctrs2 = np.multiply(np.matmul(covar, param), param) / (port_sd ** 2)
+pctrs_regress1 = np.multiply(np.matmul(covar, param), param) / (port_sd1 ** 2)
 
-print(pctrs)
-print(pctrs2)
-print(wghts)
+print(tgt_wghts)
+print(pctrs_imp1)
+print(pctrs_regress1)
+print(wghts1)
 
+new_wghts, new_port_sd, new_pctrs = fn.calc_risk_bal_weights(asset_sds=std, asset_corrs=None, risk_tgts=tgt_wghts,
+                                                             std_tgt=None, asset_covars=covar, tol=0.00001,
+                                                             iter_tot=10000)
 
+tkns_final2, fees2 = fn.rebal_by_period(timeperiod, no_rebal, prices_final, st_dollars, new_wghts, fee_pct)
+port_val2 = pd.DataFrame(data=np.sum(tkns_final2 * prices_final, axis=1), index=prices_final.index,
+                         columns=['Portfolio Values Capital Weighting'])
+port_rtns2 = np.divide(port_val2.iloc[1:], port_val2.iloc[:-1]) - 1
+port_rtns2.columns = ['Portfolio Rtns Capital Weighting']
 
+prices_last = prices_final.tail(1)
+tkns_last2 = tkns_final2.tail(1)
+wghts2 = np.divide((tkns_last2 * prices_last), np.sum(tkns_last2 * prices_last, axis=1)[0])
+
+port_ave2, port_sd2 = fn.get_simple_moments_series(port_rtns2, port_rtns2.shape[0], port_rtns2.columns[0])
+x = rtns_final
+y = port_rtns2
+model = sm.OLS(y, x)
+result = model.fit()
+# print(result.summary())
+param = result.params
+
+pctrs_regress2 = np.multiply(np.matmul(covar, param), param) / (port_sd2 ** 2)
+
+print(new_wghts)
+print(new_pctrs)
+print(pctrs_regress2)
+print(wghts2)
