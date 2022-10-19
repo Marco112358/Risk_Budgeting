@@ -87,6 +87,7 @@ rebal_band2 = [0.025] * len(token_nms)
 rebal_band3 = [0.1] * len(token_nms)
 relative_rebal_band1 = 0.1
 relative_rebal_band2 = 0.25
+no_rebal = timeperiod
 
 # Weekly Rebalancing
 tkns_final2, fees2 = fn.rebal_by_period(timeperiod, rebal_freq2, prices_final, st_dollars, tgt_wghts, fee_pct)
@@ -162,35 +163,45 @@ port_rtns9 = np.divide(port_val9.iloc[1:], port_val9.iloc[:-1]) - 1
 port_rtns9.columns = ['Portfolio Rtns Relative 25% Rebal']
 total_fees9 = np.sum(fees9)
 
+# No Rebal
+tkns_final10, fees10 = fn.rebal_by_bands(timeperiod, no_rebal, prices_final, st_dollars, tgt_wghts, fee_pct)
+port_val10 = pd.DataFrame(data=np.sum(tkns_final10 * prices_final, axis=1), index=prices_final.index,
+                         columns=['Portfolio Values No Rebalance'])
+fees10.columns = ['Fees No Rebalance']
+port_rtns10 = np.divide(port_val10.iloc[1:], port_val10.iloc[:-1]) - 1
+port_rtns10.columns = ['Portfolio Rtns No Rebalance']
+total_fees10 = np.sum(fees10)
+
 # Reformat for Printing and Graphing
-pv_dfs = [port_val1, port_val2, port_val3, port_val4, port_val5, port_val6, port_val7, port_val8, port_val9]
+pv_dfs = [port_val1, port_val2, port_val3, port_val4, port_val5, port_val6, port_val7, port_val8, port_val9, port_val10]
 port_val_final = ft.reduce(lambda left, right: pd.merge(left, right, left_index=True, right_index=True), pv_dfs)
 fig1 = px.line(data_frame=port_val_final)
 fig1.show()
+print('Final Portfolio Values Are:')
 print(port_val_final.tail().to_string())
 
-fees_dfs = [fees1, fees2, fees3, fees4, fees5, fees6, fees7, fees8, fees9]
+fees_dfs = [fees1, fees2, fees3, fees4, fees5, fees6, fees7, fees8, fees9, fees10]
 fees_final = ft.reduce(lambda left, right: pd.merge(left, right, left_index=True, right_index=True), fees_dfs)
 fees_cum = fees_final.cumsum(axis=0)
 fig2 = px.line(data_frame=fees_cum)
 fig2.show()
+print('Final Cumulative Fees Paid Are:')
 print(fees_cum.tail().to_string())
 
 port_rtns_dfs = [port_rtns1, port_rtns2, port_rtns3, port_rtns4, port_rtns5, port_rtns6, port_rtns7, port_rtns8,
-                 port_rtns9]
+                 port_rtns9, port_rtns10]
 port_rtns_final = ft.reduce(lambda left, right: pd.merge(left, right, left_index=True, right_index=True), port_rtns_dfs)
 
 ave_rtns = pd.DataFrame(data=0, index=['annualized return', 'annualized std'], columns=port_rtns_final.columns)
 for i, col in enumerate(port_rtns_final.columns):
-    ave, sd = fn.get_simple_moments_series(port_rtns_final, port_rtns_final.shape[0] - 1,
-                                           port_rtns_final.columns[i])
+    ave, sd = fn.get_simple_moments_series(port_rtns_final, port_rtns_final.shape[0], port_rtns_final.columns[i])
     ave_rtns.loc['annualized return', port_rtns_final.columns[i]] = ave * 365
     ave_rtns.loc['annualized std', port_rtns_final.columns[i]] = sd * np.sqrt(365)
 
+print('Average Returns and Risks Are:')
 ave_rtns.loc['ret/risk', :] = ave_rtns.loc['annualized return', :] / ave_rtns.loc['annualized std', :]
 print(ave_rtns.tail().to_string())
 
 HPR = np.divide(port_val_final, st_dollars) - 1
-print(HPR.tail().to_string())
-
-prices_full.to_excel("prices_full.xlsx")
+print('Final Holding Period Returns Are:')
+print(HPR.tail(1).to_string())
