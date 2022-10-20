@@ -205,3 +205,5 @@ print(ave_rtns.tail().to_string())
 HPR = np.divide(port_val_final, st_dollars) - 1
 print('Final Holding Period Returns Are:')
 print(HPR.tail(1).to_string())
+
+prices.to_csv("prices.csv")

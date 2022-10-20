@@ -66,9 +66,13 @@ param = result.params
 
 pctrs_regress1 = np.multiply(np.matmul(covar, param), param) / (port_sd1 ** 2)
 
+print('Target Weights of the Capital Weighted Portfolio are:')
 print(tgt_wghts)
+print('Forward Looking PCTRs of the Capital Weighted Portfolio are:')
 print(pctrs_imp1)
+print('Backward Looking PCTRs of the Capital Weighted Portfolio are:')
 print(pctrs_regress1)
+print('Final Weights of the Capital Weighted Portfolio are:')
 print(wghts1)
 
 new_wghts, new_port_sd, new_pctrs = fn.calc_risk_bal_weights(asset_sds=std, asset_corrs=None, risk_tgts=tgt_wghts,
@@ -95,7 +99,18 @@ param = result.params
 
 pctrs_regress2 = np.multiply(np.matmul(covar, param), param) / (port_sd2 ** 2)
 
+print('Target Weights of the Risk Balanced Portfolio are:')
 print(new_wghts)
+print('Forward Looking PCTRs of the Risk Balanced Portfolio are:')
 print(new_pctrs)
+print('Backward Looking PCTRs of the Risk Balanced Portfolio are:')
 print(pctrs_regress2)
+print('Final Weights of the Risk Balanced Portfolio are:')
 print(wghts2)
+
+print('The Annualized Standard Devation of the Tokens from ' + str(start_dt) + ' to ' + str(wghts2.index[0]))
+print(std_ann)
+print('The Correlation Matrix of the Tokens from ' + str(start_dt) + ' to ' + str(wghts2.index[0]))
+print(corr)
+
+prices.to_csv("prices.csv")
