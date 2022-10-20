@@ -121,4 +121,4 @@ print("\n")
 print('The Correlation Matrix of the Tokens from ' + str(start_dt) + ' to ' + str(wghts2.index[0]))
 print(corr)
 
-prices.to_csv("prices.csv")
+prices.to_excel("prices.xlsx")
