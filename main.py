@@ -4,10 +4,11 @@ import pandas as pd
 import functools as ft
 import numpy as np
 import plotly.express as px
-import datetime as dt
+import datetime
+import matplotlib.pyplot as plt
 import openpyxl
 
-# Parameters of Risk Balancing Backtesting 
+# Parameters of Risk Balancing Backtesting
 token_nms = ['btc', 'eth', 'atom', 'ada', 'sol']
 col_nms = ['datetime'] + token_nms
 start_dt = pd.Timestamp(year=2020, month=12, day=31)  # start really on the day following
@@ -208,7 +209,45 @@ print(HPR.tail(1).to_string())
 
 prices.to_excel("prices.xlsx")
 
+# Compare 30D Rebal to No Rebalance on 500 Different Start Dates
+n_days = 500
+timestamp_list = [start_dt + datetime.timedelta(days=x) for x in range(n_days)]
+date_list = [x.date() for x in timestamp_list]
+diff_final = pd.DataFrame(index=prices_final.index, columns=timestamp_list)
+
+for i, dt in enumerate(timestamp_list):
+    prices_trim = prices_full.loc[prices_full.index >= dt]
+    timeperiod = prices_trim.shape[0]
+    # 30D Rebal
+    tkns_final3, fees3 = fn.rebal_by_period(timeperiod, rebal_freq3, prices_trim, st_dollars, tgt_wghts, fee_pct)
+    port_val3 = pd.DataFrame(data=np.sum(tkns_final3 * prices_trim, axis=1), index=prices_trim.index,
+                             columns=['Portfolio Values 30D Rebal'])
+    # No Rebal
+    tkns_final10, fees10 = fn.rebal_by_bands(timeperiod, no_rebal, prices_trim, st_dollars, tgt_wghts, fee_pct)
+    port_val10 = pd.DataFrame(data=np.sum(tkns_final10 * prices_trim, axis=1), index=prices_trim.index,
+                              columns=['Portfolio Values No Rebalance'])
+    # Create the dataset of Rebal / No Rebal (value > 1 means Rebal better on that date
+    mrg = pd.concat([port_val3, port_val10], axis=1)
+    diff = mrg.iloc[:, 0] / mrg.iloc[:, 1]
+    diff_final[dt] = diff
+diff_final.fillna(value=1, inplace=True)
+
+diff_final.columns = date_list
+
+fig = plt.figure(figsize=(8, 6))
+ax = fig.add_subplot()
+ax.plot(diff_final.index, diff_final.loc[:, date_list], color='b', linewidth=0.05)
+ax.grid()
+fig.tight_layout()
+plt.show()
+
+last_diff = diff_final.tail(1)
+pct_above_one = last_diff[last_diff > 1].count(axis=1)[0] / last_diff.shape[1]
+print('Percentage of Rebalanced Portfolios that end Greater Than No Rebalanced Portfolios starting every day from '
+      + str(start_dt.date()) + ' to ' + str(date_list[len(date_list) - 1]) + ' is ' + str(pct_above_one * 100) + '%')
+
 ### START TESTING SIMULATED RETURN SERIES ###
 ave, std, covar, corr = fn.get_simple_moments(rtns_final, rtn_timeperiod)
 data = pd.DataFrame(data=np.random.multivariate_normal(ave, covar, size=100), columns=ave.index)
 (1+data).product()
+
