@@ -206,4 +206,9 @@ HPR = np.divide(port_val_final, st_dollars) - 1
 print('Final Holding Period Returns Are:')
 print(HPR.tail(1).to_string())
 
-prices.to_csv("prices.csv")
+prices.to_excel("prices.xlsx")
+
+### START TESTING SIMULATED RETURN SERIES ###
+ave, std, covar, corr = fn.get_simple_moments(rtns_final, rtn_timeperiod)
+data = pd.DataFrame(data=np.random.multivariate_normal(ave, covar, size=100), columns=ave.index)
+(1+data).product()
