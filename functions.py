@@ -280,3 +280,24 @@ def rebal_by_period_risk_balancing(timeperiod=100, lookback=90, rebal_freq=None,
             else:
                 cash_final.iloc[i] = cash_final.iloc[i - 1][0] * (1 + int_rec / 365)
     return tkns_final, fees, wghts_final, cash_final, pctrs_final
+
+
+def hist_sample(rtns=None, sample_len=30, no_samples=12, prc_st_list=None):
+    # This will use duplicate Returns !!!!
+    rtns_used = rtns.reset_index(drop=True)
+    rtns_final = rtns_used.iloc[:-sample_len, :]
+    rtns_out = pd.DataFrame()
+
+    for i in np.arange(0, no_samples):
+        n = np.random.randint(0, rtns_final.shape[0])
+        df_sample = rtns_used.iloc[n:(n + sample_len), :]
+        rtns_out = pd.concat([rtns_out, df_sample], axis=0, ignore_index=True)
+
+    prc_out = pd.DataFrame(index=rtns_out.index, columns=rtns_out.columns)
+    for j in np.arange(0, rtns_out.shape[0]):
+        if j == 0:
+            prc_out.iloc[j, :] = prc_st_list * (1+rtns_out.iloc[j, :])
+        else:
+            prc_out.iloc[j, :] = prc_out.iloc[j - 1, :] * (1 + rtns_out.iloc[j, :])
+
+    return prc_out, rtns_out

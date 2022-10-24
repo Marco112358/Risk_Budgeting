@@ -223,7 +223,7 @@ for i, dt in enumerate(timestamp_list):
     port_val3 = pd.DataFrame(data=np.sum(tkns_final3 * prices_trim, axis=1), index=prices_trim.index,
                              columns=['Portfolio Values 30D Rebal'])
     # No Rebal
-    tkns_final10, fees10 = fn.rebal_by_bands(timeperiod, no_rebal, prices_trim, st_dollars, tgt_wghts, fee_pct)
+    tkns_final10, fees10 = fn.rebal_by_period(timeperiod, no_rebal, prices_trim, st_dollars, tgt_wghts, fee_pct)
     port_val10 = pd.DataFrame(data=np.sum(tkns_final10 * prices_trim, axis=1), index=prices_trim.index,
                               columns=['Portfolio Values No Rebalance'])
     # Create the dataset of Rebal / No Rebal (value > 1 means Rebal better on that date
