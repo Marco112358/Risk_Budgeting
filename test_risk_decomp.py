@@ -4,36 +4,41 @@ import pandas as pd
 import functools as ft
 import numpy as np
 import statsmodels.api as sm
+import plotly.express as px
 
 # Parameters of Risk Balancing Backtesting
-token_nms = ['btc', 'atom', 'sol']
+token_nms = ['btc', 'eth', 'atom', 'luna']
 col_nms = ['datetime'] + token_nms
-start_dt = pd.Timestamp(year=2021, month=12, day=31)  # start really on the day following
+start_dt = pd.Timestamp(year=2021, month=6, day=30)  # start really on the day following
+stop_dt = pd.Timestamp(year=2022, month=6, day=1)  # end date really the day prior
 st_dollars = 10000
 fee_pct = 0.003
-tgt_wghts = [0.33333333, 0.33333333, 0.33333333]
-
+tgt_wghts = [0.25, 0.25, 0.25, 0.25]
+rebal_freq = 90
+lookback = rebal_freq
+half_life = rebal_freq / 3
+tgt_risk_wghts = tgt_wghts
 weighting_type = 'exp'  # options are exp for exponential or arth for arithmetic
 tol = 0.00001
 iter_tot = 10000
 int_paid = 0.02
 int_rec = int_paid
+needed_first_dt = start_dt - pd.Timedelta(days=(lookback + 1))
 
 # API Pulls from Coin Gecko
 btc = cg_pull('bitcoin', 'usd', 'max', 'daily')
 atom = cg_pull('cosmos', 'usd', 'max', 'daily')
-kuji = cg_pull('kujira', 'usd', 'max', 'daily')
-usdc = cg_pull('usd-coin', 'usd', 'max', 'daily')
+luna = cg_pull('terra-luna', 'usd', 'max', 'daily')
 eth = cg_pull('ethereum', 'usd', 'max', 'daily')
-sol = cg_pull('solana', 'usd', 'max', 'daily')
-ada = cg_pull('cardano', 'usd', 'max', 'daily')
-dfs = [btc, atom, sol]  # this needs to be changed if u change the tokens allocated to
+dfs = [btc, eth, atom, luna]   # this needs to be changed if u change the tokens allocated to
 
 # Implied Parameters
 prices = ft.reduce(lambda left, right: pd.merge(left, right, on='datetime'), dfs)
 prices.columns = col_nms
 prices.set_index('datetime', inplace=True)
-prices_final = prices.loc[prices.index >= start_dt]
+prices_full = prices.loc[np.logical_and(stop_dt >= prices.index, prices.index >= needed_first_dt)]
+rtns_full = np.divide(prices_full.iloc[1:], prices_full.iloc[:-1]) - 1
+prices_final = prices.loc[np.logical_and(stop_dt >= prices.index, prices.index >= start_dt)]
 rtns_final = np.divide(prices_final.iloc[1:], prices_final.iloc[:-1]) - 1
 
 timeperiod = prices_final.shape[0]
@@ -83,11 +88,19 @@ new_wghts, new_port_sd, new_pctrs = fn.calc_risk_bal_weights(asset_sds=std, asse
                                                              std_tgt=None, asset_covars=covar, tol=0.00001,
                                                              iter_tot=10000)
 
-tkns_final2, fees2 = fn.rebal_by_period(timeperiod, no_rebal, prices_final, st_dollars, new_wghts, fee_pct)
+tkns_final2, fees2, \
+wghts_final2, cash_final2, pctrs2 = fn.rebal_by_period_risk_balancing(timeperiod=timeperiod, lookback=lookback,
+                                                                      rebal_freq=rebal_freq, prices=prices_full,
+                                                                      rtns=rtns_full, st_dollars=st_dollars,
+                                                                      tgt_risk_wghts=tgt_risk_wghts, fee_pct=fee_pct,
+                                                                      half_life=half_life, start_dt=start_dt,
+                                                                      weighting_type=weighting_type, tol=tol,
+                                                                      iter_tot=iter_tot, std_tgt=None,
+                                                                      int_paid=int_paid, int_rec=int_rec)
 port_val2 = pd.DataFrame(data=np.sum(tkns_final2 * prices_final, axis=1), index=prices_final.index,
-                         columns=['Portfolio Values Capital Weighting'])
+                         columns=['Portfolio Values Risk Weighting'])
 port_rtns2 = np.divide(port_val2.iloc[1:], port_val2.iloc[:-1]) - 1
-port_rtns2.columns = ['Portfolio Rtns Capital Weighting']
+port_rtns2.columns = ['Portfolio Rtns Risk Weighting']
 
 prices_last = prices_final.tail(1)
 tkns_last2 = tkns_final2.tail(1)
@@ -122,3 +135,11 @@ print('The Correlation Matrix of the Tokens from ' + str(start_dt) + ' to ' + st
 print(corr)
 
 prices.to_excel("prices.xlsx")
+
+# Reformat for Printing and Graphing
+pv_dfs = [port_val1, port_val2]
+port_val_final = ft.reduce(lambda left, right: pd.merge(left, right, left_index=True, right_index=True), pv_dfs)
+fig1 = px.line(data_frame=port_val_final)
+fig1.show()
+print('Final Portfolio Values Are:')
+print(port_val_final.tail().to_string())

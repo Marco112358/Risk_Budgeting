@@ -50,6 +50,9 @@ rtns_full = np.divide(prices_full.iloc[1:], prices_full.iloc[:-1]) - 1
 prices_final = prices.loc[prices.index >= start_dt]
 rtns_final = np.divide(prices_final.iloc[1:], prices_final.iloc[:-1]) - 1
 
+ave, std, covar, corr = fn.get_simple_moments(rtns_full)
+ann_ave, ann_std, ann_cov = fn.annualize_moments(ave, std,covar)
+
 # prices_usdc = prices_other.loc[:, 'usdc']
 timeperiod = prices_final.shape[0]
 rtn_timeperiod = rtns_final.shape[0]
